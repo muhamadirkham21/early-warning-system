@@ -1,0 +1,24 @@
+
+=================================================================
+  EARLY WARNING SYSTEM — Data Ingestion Report
+  Generated: 2026-02-24 21:06:10
+=================================================================
+
+[1] CREDIT RISK
+  Dataset   : German Credit (UCI ML Repository)
+  Rows      : 1,000
+  Columns   : 21
+  Fraud Rate: 30.0% (Bad Credit)
+
+[2] MARKET RISK  
+  Tickers   : ^JKSE, BBCA.JK, BBRI.JK, TLKM.JK, ASII.JK, BMRI.JK
+  Period    : 2021-02-25 → 2026-02-24
+  Shape     : (1202, 6)
+
+[3] OPERATIONAL RISK
+  Dataset   : Synthetic Transaction Data
+  Rows      : 50,000
+  Fraud Rate: 2.5%
+
+STATUS: ✅ Ingestion Complete
+=================================================================
