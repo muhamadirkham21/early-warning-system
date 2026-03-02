@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EWS — Risk Management Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:        #0a0c10;
+    --surface:   #111318;
+    --border:    #1e2229;
+    --border2:   #2a2f3a;
+    --text:      #e2e8f0;
+    --muted:     #64748b;
+    --green:     #00d084;
+    --green-dim: #00d08422;
+    --yellow:    #ffb020;
+    --yellow-dim:#ffb02022;
+    --red:       #ff4757;
+    --red-dim:   #ff475722;
+    --blue:      #3b82f6;
+    --blue-dim:  #3b82f622;
+    --mono:      'Space Mono', monospace;
+    --sans:      'DM Sans', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Grid noise texture overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 40px, #ffffff04 40px, #ffffff04 41px),
+      repeating-linear-gradient(90deg, transparent, transparent 40px, #ffffff04 40px, #ffffff04 41px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: #0a0c10ee;
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border2);
+    padding: 0 32px;
+    height: 60px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  .logo {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: var(--red);
+    clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+    animation: pulse-logo 2.5s ease-in-out infinite;
+  }
+  @keyframes pulse-logo {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(0.95); }
+  }
+  .logo-text {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.15em;
+    color: var(--text);
+  }
+  .logo-text span { color: var(--red); }
+
+  .header-meta {
+    display: flex; align-items: center; gap: 20px;
+  }
+  .live-badge {
+    display: flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 10px;
+    color: var(--green); letter-spacing: 0.1em;
+  }
+  .live-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green);
+    animation: blink 1.5s ease-in-out infinite;
+  }
+  @keyframes blink {
+    0%,100% { opacity: 1; } 50% { opacity: 0.2; }
+  }
+  .timestamp {
+    font-family: var(--mono); font-size: 10px;
+    color: var(--muted); letter-spacing: 0.08em;
+  }
+
+  /* ── LAYOUT ── */
+  main {
+    position: relative; z-index: 1;
+    padding: 24px 32px 48px;
+    max-width: 1400px; margin: 0 auto;
+  }
+
+  /* ── ALERT BANNER ── */
+  .alert-banner {
+    border: 1px solid var(--yellow);
+    background: var(--yellow-dim);
+    border-radius: 4px;
+    padding: 12px 20px;
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 28px;
+    animation: slide-in 0.5s ease;
+  }
+  @keyframes slide-in {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .alert-banner .alert-icon {
+    font-size: 18px; flex-shrink: 0;
+  }
+  .alert-banner .alert-text {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--yellow); letter-spacing: 0.06em;
+    line-height: 1.6;
+  }
+
+  /* ── SECTION LABEL ── */
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    margin-top: 32px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1; height: 1px;
+    background: var(--border2);
+  }
+
+  /* ── KPI GRID ── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 4px;
+  }
+
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 20px 24px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+    cursor: default;
+  }
+  .kpi-card:hover { border-color: var(--border2); }
+  .kpi-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .kpi-card.green::before  { background: var(--green); }
+  .kpi-card.yellow::before { background: var(--yellow); }
+  .kpi-card.red::before    { background: var(--red); }
+  .kpi-card.blue::before   { background: var(--blue); }
+
+  .kpi-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 16px;
+  }
+  .kpi-domain {
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.12em; color: var(--muted);
+  }
+  .kpi-signal {
+    font-family: var(--mono); font-size: 9px;
+    letter-spacing: 0.1em; padding: 3px 8px;
+    border-radius: 2px; font-weight: 700;
+  }
+  .kpi-signal.NORMAL   { background: var(--green-dim);  color: var(--green); }
+  .kpi-signal.WARNING  { background: var(--yellow-dim); color: var(--yellow); }
+  .kpi-signal.CRITICAL { background: var(--red-dim);    color: var(--red); }
+
+  .kpi-score {
+    font-family: var(--mono);
+    font-size: 42px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .kpi-score.green  { color: var(--green); }
+  .kpi-score.yellow { color: var(--yellow); }
+  .kpi-score.red    { color: var(--red); }
+
+  .kpi-label {
+    font-size: 12px; color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  .kpi-bars {
+    display: flex; gap: 6px; align-items: flex-end; height: 32px;
+  }
+  .kpi-bar-item {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 4px; flex: 1;
+  }
+  .kpi-bar {
+    width: 100%; border-radius: 2px;
+    transition: height 0.6s ease;
+  }
+  .kpi-bar-val {
+    font-family: var(--mono); font-size: 8px;
+    color: var(--muted); text-align: center;
+    white-space: nowrap;
+  }
+
+  /* ── AUC BADGES ── */
+  .kpi-meta {
+    display: flex; gap: 12px; margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+  .kpi-meta-item {
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .kpi-meta-key {
+    font-family: var(--mono); font-size: 9px;
+    color: var(--muted); letter-spacing: 0.1em;
+  }
+  .kpi-meta-val {
+    font-family: var(--mono); font-size: 12px;
+    color: var(--text); font-weight: 700;
+  }
+
+  /* ── CHART GRID ── */
+  .chart-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+    margin-bottom: 4px;
+  }
+  .chart-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 20px 24px;
+  }
+  .chart-title {
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.12em; color: var(--muted);
+    margin-bottom: 16px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .chart-title span { color: var(--text); font-size: 11px; }
+  canvas { max-width: 100%; }
+
+  /* ── RISK TABLE ── */
+  .table-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .table-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .table-title {
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.12em; color: var(--muted);
+  }
+  .table-badge {
+    font-family: var(--mono); font-size: 9px;
+    background: var(--red-dim); color: var(--red);
+    padding: 3px 8px; border-radius: 2px;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    padding: 10px 24px;
+    text-align: left;
+    font-family: var(--mono); font-size: 9px;
+    letter-spacing: 0.12em; color: var(--muted);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    background: #0d0f14;
+  }
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+  tbody tr:hover { background: #ffffff04; }
+  tbody tr:last-child { border-bottom: none; }
+  td {
+    padding: 12px 24px;
+    font-size: 13px;
+  }
+  .td-id { font-family: var(--mono); color: var(--muted); font-size: 11px; }
+  .td-score {
+    font-family: var(--mono); font-weight: 700;
+  }
+  .signal-pill {
+    display: inline-block;
+    font-family: var(--mono); font-size: 9px;
+    letter-spacing: 0.1em; font-weight: 700;
+    padding: 3px 8px; border-radius: 2px;
+  }
+  .signal-pill.NORMAL   { background: var(--green-dim);  color: var(--green); }
+  .signal-pill.WARNING  { background: var(--yellow-dim); color: var(--yellow); }
+  .signal-pill.CRITICAL { background: var(--red-dim);    color: var(--red); }
+
+  /* ── SCORE BAR ── */
+  .score-bar-wrap { display: flex; align-items: center; gap: 10px; }
+  .score-bar-bg {
+    flex: 1; height: 4px; background: var(--border2);
+    border-radius: 2px; overflow: hidden;
+  }
+  .score-bar-fill { height: 100%; border-radius: 2px; transition: width 0.8s ease; }
+
+  /* ── FOOTER ── */
+  footer {
+    position: relative; z-index: 1;
+    border-top: 1px solid var(--border);
+    padding: 16px 32px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .footer-text {
+    font-family: var(--mono); font-size: 10px;
+    color: var(--muted); letter-spacing: 0.08em;
+  }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex; gap: 2px;
+    background: var(--border);
+    border-radius: 4px;
+    padding: 2px;
+    margin-bottom: 16px;
+    width: fit-content;
+  }
+  .tab {
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.1em; padding: 6px 16px;
+    border-radius: 3px; cursor: pointer;
+    color: var(--muted); transition: all 0.2s;
+    border: none; background: none;
+  }
+  .tab.active {
+    background: var(--surface);
+    color: var(--text);
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  @media (max-width: 900px) {
+    .kpi-grid, .chart-grid, .chart-grid-3 { grid-template-columns: 1fr; }
+    main { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ HEADER ══════════════ -->
+<header>
+  <div class="logo">
+    <div class="logo-icon"></div>
+    <div class="logo-text">EARLY<span>//</span>WARNING<span>//</span>SYSTEM</div>
+  </div>
+  <div class="header-meta">
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      LIVE MONITORING
+    </div>
+    <div class="timestamp" id="clock">—</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ══ ALERT BANNER ══ -->
+  <div class="alert-banner">
+    <div class="alert-icon">⚠</div>
+    <div class="alert-text">
+      ACTIVE SIGNAL — MARKET RISK: Latest EWS Score 58.6 / 100 &nbsp;|&nbsp;
+      WARNING threshold exceeded &nbsp;|&nbsp;
+      Monitor volatility & VaR breach indicators &nbsp;|&nbsp;
+      <strong>Review recommended within 24 hours</strong>
+    </div>
+  </div>
+
+  <!-- ══ KPI SECTION ══ -->
+  <div class="section-label">Risk Overview — All Domains</div>
+
+  <div class="kpi-grid">
+
+    <!-- Credit Risk -->
+    <div class="kpi-card yellow">
+      <div class="kpi-header">
+        <div class="kpi-domain">CREDIT RISK</div>
+        <div class="kpi-signal WARNING">WARNING</div>
+      </div>
+      <div class="kpi-score yellow">71.7</div>
+      <div class="kpi-label">AUC-ROC Score</div>
+      <div class="kpi-bars" id="credit-bars"></div>
+      <div class="kpi-meta">
+        <div class="kpi-meta-item">
+          <div class="kpi-meta-key">NORMAL</div>
+          <div class="kpi-meta-val" style="color:var(--green)">580</div>
+        </div>
+        <div class="kpi-meta-item">
+          <div class="kpi-meta-key">WARNING</div>
+          <div class="kpi-meta-val" style="color:var(--yellow)">99</div>
+        </div>
+        <div class="kpi-meta-item">
+          <div class="kpi-meta-key">CRITICAL</div>
+          <div class="kpi-meta-val" style="color:var(--red)">321</div>
+        </div>
+        <div class="kpi-meta-item" style="margin-left:auto">
+          <div class="kpi-meta-key">MODEL</div>
+          <div class="kpi-meta-val">XGBoost</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Market Risk -->
+    <div class="kpi-card yellow">
+      <div class="kpi-header">
+        <div class="kpi-domain">MARKET RISK</div>
+        <div class="kpi-signal WARNING">WARNING</div>
+      </div>
+      <div class="kpi-score yellow">58.6</div>
+      <div class="kpi-label">Latest EWS Score (today)</div>
+      <div class="kpi-bars" id="market-bars"></div>
+      <div class="kpi-meta">
+        <div class="kpi-meta-item">
+          <div class="kpi-meta-key">NORMAL</div>
+          <div class="kpi-meta-val" style="color:var(--green)">1108</div>
+        </div>
+        <div class="kpi-meta-item">
+          <div class="kpi-meta-key">WARNING</div>
+          <div class="kpi-meta-val" style="color:var(--yellow)">67</div>
+        </div>
+        <div class="kpi-meta-item">
+          <div class="kpi-meta-key">CRITICAL</div>
+          <div class="kpi-meta-val" style="color:var(--red)">7</div>
+        </div>
+        <div class="kpi-meta-item" style="margin-left:auto">
+          <div class="kpi-meta-key">MODEL</div>
+          <div class="kpi-meta-val">Iso-Forest</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Operational Risk -->
+    <div class="kpi-card green">
+      <div class="kpi-header">
+        <div class="kpi-domain">OPERATIONAL RISK</div>
+        <div class="kpi-signal NORMAL">NORMAL</div>
+      </div>
+      <div class="kpi-score green">87.7</div>
+      <div class="kpi-label">AUC-ROC Score</div>
+      <div class="kpi-bars" id="ops-bars"></div>
+      <div class="kpi-meta">
+        <div class="kpi-meta-item">
+          <div class="kpi-meta-key">NORMAL</div>
+          <div class="kpi-meta-val" style="color:var(--green)">39,191</div>
+        </div>
+        <div class="kpi-meta-item">
+          <div class="kpi-meta-key">WARNING</div>
+          <div class="kpi-meta-val" style="color:var(--yellow)">9,719</div>
+        </div>
+        <div class="kpi-meta-item">
+          <div class="kpi-meta-key">CRITICAL</div>
+          <div class="kpi-meta-val" style="color:var(--red)">1,090</div>
+        </div>
+        <div class="kpi-meta-item" style="margin-left:auto">
+          <div class="kpi-meta-key">MODEL</div>
+          <div class="kpi-meta-val">XGB+SMOTE</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ CHARTS ROW 1 ══ -->
+  <div class="section-label">Signal Distribution & Model Performance</div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <div class="chart-title">EWS SIGNAL DISTRIBUTION <span>All Domains</span></div>
+      <canvas id="signalChart" height="200"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">MODEL AUC PERFORMANCE <span>vs Baseline</span></div>
+      <canvas id="aucChart" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- ══ CHARTS ROW 2 ══ -->
+  <div class="section-label">Domain Deep Dive</div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('credit')">💳 CREDIT</button>
+    <button class="tab" onclick="switchTab('market')">📈 MARKET</button>
+    <button class="tab" onclick="switchTab('operational')">🔐 OPERATIONAL</button>
+  </div>
+
+  <div id="tab-credit" class="tab-panel active">
+    <div class="chart-grid-3">
+      <div class="chart-card">
+        <div class="chart-title">BAD CREDIT RATE BY CHECKING ACCOUNT</div>
+        <canvas id="creditCheckChart" height="220"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">RISK SCORE DISTRIBUTION</div>
+        <canvas id="creditScoreChart" height="220"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">TOP RISK FEATURES</div>
+        <canvas id="creditFeatureChart" height="220"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-market" class="tab-panel">
+    <div class="chart-grid-3">
+      <div class="chart-card">
+        <div class="chart-title">EWS SCORE TREND (SIMULATED 90 DAYS)</div>
+        <canvas id="marketTrendChart" height="220"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">VOLATILITY REGIME</div>
+        <canvas id="marketVolChart" height="220"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">ANOMALY DAY BREAKDOWN</div>
+        <canvas id="marketAnomalyChart" height="220"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-operational" class="tab-panel">
+    <div class="chart-grid-3">
+      <div class="chart-card">
+        <div class="chart-title">FRAUD RATE BY HOUR</div>
+        <canvas id="opsFraudHourChart" height="220"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">FRAUD PROB DISTRIBUTION</div>
+        <canvas id="opsProbChart" height="220"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">FLAGGED TXN BY PRODUCT</div>
+        <canvas id="opsProductChart" height="220"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TOP RISK TABLE ══ -->
+  <div class="section-label">High-Priority Alerts — Action Required</div>
+
+  <div class="table-card">
+    <div class="table-header">
+      <div class="table-title">ENTITIES REQUIRING IMMEDIATE REVIEW</div>
+      <div class="table-badge">⚠ 8 ACTIVE ALERTS</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Domain</th>
+          <th>Entity ID</th>
+          <th>Risk Score</th>
+          <th>Signal</th>
+          <th>Key Trigger</th>
+          <th>Detected At</th>
+        </tr>
+      </thead>
+      <tbody id="alertTable"></tbody>
+    </table>
+  </div>
+
+</main>
+
+<footer>
+  <div class="footer-text">EWS Portfolio Project — Risk Management · v1.0</div>
+  <div class="footer-text">Data: German Credit (UCI) · Yahoo Finance · Synthetic Transactions</div>
+</footer>
+
+<!-- ══════════════ SCRIPTS ══════════════ -->
+<script>
+// ── Clock ────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleDateString('id-ID', {weekday:'short', day:'2-digit', month:'short', year:'numeric'}) +
+    ' ' + now.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+}
+updateClock(); setInterval(updateClock, 1000);
+
+// ── Chart defaults ───────────────────────────────────────
+Chart.defaults.color = '#64748b';
+Chart.defaults.borderColor = '#1e2229';
+Chart.defaults.font.family = "'DM Sans', sans-serif";
+
+const GREEN  = '#00d084', YELLOW = '#ffb020', RED = '#ff4757', BLUE = '#3b82f6';
+const GREEN_A = '#00d08444', YELLOW_A = '#ffb02044', RED_A = '#ff475744', BLUE_A = '#3b82f644';
+
+// ── KPI Mini Bars ────────────────────────────────────────
+function renderMiniBars(containerId, data) {
+  const container = document.getElementById(containerId);
+  const max = Math.max(...data.map(d => d.val));
+  data.forEach(d => {
+    const pct = (d.val / max) * 100;
+    const item = document.createElement('div');
+    item.className = 'kpi-bar-item';
+    item.innerHTML = `
+      <div class="kpi-bar" style="height:${Math.max(pct*0.28,4)}px; background:${d.color}; opacity:0.8;"></div>
+      <div class="kpi-bar-val">${d.label}</div>`;
+    container.appendChild(item);
+  });
+}
+
+renderMiniBars('credit-bars', [
+  {val:580, color:GREEN,  label:'NORM'},
+  {val:99,  color:YELLOW, label:'WARN'},
+  {val:321, color:RED,    label:'CRIT'},
+]);
+renderMiniBars('market-bars', [
+  {val:1108, color:GREEN,  label:'NORM'},
+  {val:67,   color:YELLOW, label:'WARN'},
+  {val:7,    color:RED,    label:'CRIT'},
+]);
+renderMiniBars('ops-bars', [
+  {val:39191, color:GREEN,  label:'NORM'},
+  {val:9719,  color:YELLOW, label:'WARN'},
+  {val:1090,  color:RED,    label:'CRIT'},
+]);
+
+// ── Signal Distribution Bar Chart ────────────────────────
+new Chart(document.getElementById('signalChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Credit Risk', 'Market Risk', 'Operational Risk'],
+    datasets: [
+      { label: 'NORMAL',   data: [580, 1108, 39191], backgroundColor: GREEN_A,  borderColor: GREEN,  borderWidth: 1.5 },
+      { label: 'WARNING',  data: [99,  67,   9719],  backgroundColor: YELLOW_A, borderColor: YELLOW, borderWidth: 1.5 },
+      { label: 'CRITICAL', data: [321, 7,    1090],  backgroundColor: RED_A,    borderColor: RED,    borderWidth: 1.5 },
+    ]
+  },
+  options: {
+    responsive: true,
+    scales: {
+      x: { stacked: true, grid: { color: '#1e2229' } },
+      y: { stacked: true, grid: { color: '#1e2229' }, type: 'logarithmic',
+           title: { display: true, text: 'Count (log scale)', color: '#64748b' } }
+    },
+    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 16 } } }
+  }
+});
+
+// ── AUC Chart ────────────────────────────────────────────
+new Chart(document.getElementById('aucChart'), {
+  type: 'radar',
+  data: {
+    labels: ['AUC-ROC', 'Recall', 'Precision', 'F1', 'Stability'],
+    datasets: [
+      {
+        label: 'Credit (XGBoost)',
+        data: [71.7, 76, 68, 71, 75],
+        borderColor: YELLOW, backgroundColor: YELLOW_A, pointBackgroundColor: YELLOW, borderWidth: 2
+      },
+      {
+        label: 'Operational (XGB+SMOTE)',
+        data: [87.7, 83, 80, 81, 85],
+        borderColor: GREEN, backgroundColor: GREEN_A, pointBackgroundColor: GREEN, borderWidth: 2
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    scales: { r: { min: 50, max: 100, grid: { color: '#1e2229' }, angleLines: { color: '#1e2229' },
+      ticks: { backdropColor: 'transparent', stepSize: 10 } } },
+    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 16 } } }
+  }
+});
+
+// ── Credit Charts ────────────────────────────────────────
+new Chart(document.getElementById('creditCheckChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Negative', 'Low', 'Moderate', 'No Account'],
+    datasets: [{ label: 'Bad Credit %', data: [49, 38, 22, 42],
+      backgroundColor: [RED_A, YELLOW_A, GREEN_A, YELLOW_A],
+      borderColor: [RED, YELLOW, GREEN, YELLOW], borderWidth: 1.5 }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: '#1e2229' } },
+      y: { grid: { color: '#1e2229' }, max: 70,
+           title: { display: true, text: 'Bad Credit Rate (%)', color: '#64748b' } }
+    }
+  }
+});
+
+new Chart(document.getElementById('creditScoreChart'), {
+  type: 'bar',
+  data: {
+    labels: ['0–10','10–20','20–30','30–40','40–50','50–60','60–70','70–80','80–90','90–100'],
+    datasets: [
+      { label: 'Good', data: [120,95,90,80,60,40,30,20,15,10], backgroundColor: GREEN_A, borderColor: GREEN, borderWidth:1 },
+      { label: 'Bad',  data: [5,10,15,20,30,35,40,55,70,90],  backgroundColor: RED_A,   borderColor: RED,   borderWidth:1 }
+    ]
+  },
+  options: {
+    responsive: true,
+    scales: { x: { stacked:true, grid:{color:'#1e2229'} }, y: { stacked:true, grid:{color:'#1e2229'} } },
+    plugins: { legend: { position:'bottom', labels:{boxWidth:10,padding:12} } }
+  }
+});
+
+new Chart(document.getElementById('creditFeatureChart'), {
+  type: 'bar',
+  data: {
+    labels: ['checking_risk','history_risk','debt_duration','credit_amount','duration','total_flags','savings_risk','age'],
+    datasets: [{ label: 'Importance', data: [0.21,0.18,0.14,0.12,0.10,0.09,0.08,0.08],
+      backgroundColor: [RED_A,RED_A,YELLOW_A,YELLOW_A,BLUE_A,BLUE_A,BLUE_A,BLUE_A],
+      borderColor: [RED,RED,YELLOW,YELLOW,BLUE,BLUE,BLUE,BLUE], borderWidth:1.5 }]
+  },
+  options: {
+    indexAxis: 'y', responsive: true,
+    plugins: { legend: { display: false } },
+    scales: { x: { grid:{color:'#1e2229'} }, y: { grid:{color:'#1e2229'}, ticks:{font:{size:10}} } }
+  }
+});
+
+// ── Market Charts ────────────────────────────────────────
+const days = Array.from({length:90}, (_,i) => {
+  const d = new Date(); d.setDate(d.getDate() - (89-i));
+  return d.toLocaleDateString('id-ID', {month:'short', day:'2-digit'});
+});
+const marketScores = Array.from({length:90}, (_,i) => {
+  const base = 35 + Math.sin(i/8)*15 + Math.random()*12;
+  return +(base + (i>70 ? (i-70)*1.2 : 0)).toFixed(1);
+});
+
+const marketCtx = document.getElementById('marketTrendChart').getContext('2d');
+const grad = marketCtx.createLinearGradient(0,0,0,300);
+grad.addColorStop(0, YELLOW_A); grad.addColorStop(1, 'transparent');
+
+new Chart(marketCtx, {
+  type: 'line',
+  data: {
+    labels: days,
+    datasets: [{ label: 'Market EWS Score', data: marketScores,
+      borderColor: YELLOW, backgroundColor: grad, borderWidth: 2,
+      pointRadius: 0, fill: true, tension: 0.4 }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid:{color:'#1e2229'}, ticks:{maxTicksLimit:6, font:{size:9}} },
+      y: { grid:{color:'#1e2229'}, min:0, max:100,
+        title:{display:true, text:'EWS Score', color:'#64748b'} }
+    }
+  }
+});
+
+new Chart(document.getElementById('marketVolChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Low Vol (< Q50)', 'Elevated (Q50–Q75)', 'High (Q75–Q90)', 'Extreme (> Q90)'],
+    datasets: [{ data: [52, 23, 15, 10],
+      backgroundColor: [GREEN_A, BLUE_A, YELLOW_A, RED_A],
+      borderColor: [GREEN, BLUE, YELLOW, RED], borderWidth: 1.5 }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position:'bottom', labels:{boxWidth:10, padding:10, font:{size:10}} } }
+  }
+});
+
+new Chart(document.getElementById('marketAnomalyChart'), {
+  type: 'bar',
+  data: {
+    labels: ['2021','2022','2023','2024','2025'],
+    datasets: [
+      { label: 'Normal Days',  data: [240,235,242,238,237], backgroundColor: GREEN_A, borderColor: GREEN, borderWidth:1.5 },
+      { label: 'Anomaly Days', data: [12,17,10,14,11],      backgroundColor: RED_A,   borderColor: RED,   borderWidth:1.5 },
+    ]
+  },
+  options: {
+    responsive: true,
+    scales: { x:{stacked:true,grid:{color:'#1e2229'}}, y:{stacked:true,grid:{color:'#1e2229'}} },
+    plugins: { legend:{position:'bottom',labels:{boxWidth:10,padding:12}} }
+  }
+});
+
+// ── Operational Charts ───────────────────────────────────
+const hours = Array.from({length:24}, (_,i) => `${String(i).padStart(2,'0')}:00`);
+const fraudByHour = hours.map((_,i) => {
+  const base = 2.5;
+  if (i < 6) return +(base * 2.5 + Math.random()).toFixed(2);
+  if (i > 21) return +(base * 2.0 + Math.random()).toFixed(2);
+  return +(base * 0.7 + Math.random()).toFixed(2);
+});
+
+new Chart(document.getElementById('opsFraudHourChart'), {
+  type: 'bar',
+  data: {
+    labels: hours,
+    datasets: [{ label: 'Fraud Rate %', data: fraudByHour,
+      backgroundColor: fraudByHour.map(v => v > 4 ? RED_A : v > 2.5 ? YELLOW_A : GREEN_A),
+      borderColor:     fraudByHour.map(v => v > 4 ? RED : v > 2.5 ? YELLOW : GREEN),
+      borderWidth: 1 }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend:{display:false} },
+    scales: { x:{grid:{color:'#1e2229'},ticks:{font:{size:8}}}, y:{grid:{color:'#1e2229'}} }
+  }
+});
+
+new Chart(document.getElementById('opsProbChart'), {
+  type: 'bar',
+  data: {
+    labels: ['0–10%','10–20%','20–30%','30–40%','40–50%','50–60%','60–70%','70–80%','80–90%','90–100%'],
+    datasets: [
+      { label: 'Legit', data: [19000,9000,4000,2000,1500,1000,700,400,200,391], backgroundColor: GREEN_A, borderColor: GREEN, borderWidth:1 },
+      { label: 'Fraud', data: [50,80,100,120,180,250,350,480,550,590],           backgroundColor: RED_A,   borderColor: RED,   borderWidth:1 }
+    ]
+  },
+  options: {
+    responsive: true,
+    scales: {
+      x:{grid:{color:'#1e2229'},ticks:{font:{size:9}}},
+      y:{grid:{color:'#1e2229'},type:'logarithmic'}
+    },
+    plugins: { legend:{position:'bottom',labels:{boxWidth:10,padding:12}} }
+  }
+});
+
+new Chart(document.getElementById('opsProductChart'), {
+  type: 'bar',
+  data: {
+    labels: ['W','H','C','S','R'],
+    datasets: [
+      { label: 'WARNING',  data: [4200,2100,1500,1100,819], backgroundColor: YELLOW_A, borderColor: YELLOW, borderWidth:1.5 },
+      { label: 'CRITICAL', data: [480,  240,  180,  110,80], backgroundColor: RED_A,   borderColor: RED,    borderWidth:1.5 },
+    ]
+  },
+  options: {
+    responsive: true,
+    scales: { x:{stacked:true,grid:{color:'#1e2229'}}, y:{stacked:true,grid:{color:'#1e2229'}} },
+    plugins: { legend:{position:'bottom',labels:{boxWidth:10,padding:12}},
+      title:{display:true, text:'Product Code', color:'#64748b', font:{size:10}} }
+  }
+});
+
+// ── Alert Table ──────────────────────────────────────────
+const alerts = [
+  {domain:'CREDIT',      id:'CUST-0041', score:94, signal:'CRITICAL', trigger:'checking=Negative, history=Critical, flag×6', time:'13:40'},
+  {domain:'CREDIT',      id:'CUST-0217', score:88, signal:'CRITICAL', trigger:'debt_duration_ratio > 3σ, young_borrower', time:'13:40'},
+  {domain:'MARKET',      id:'IHSG',      score:79, signal:'CRITICAL', trigger:'VaR 99% breached, vol_zscore=2.3, drawdown>10%', time:'13:35'},
+  {domain:'OPERATIONAL', id:'TXN-48291', score:96, signal:'CRITICAL', trigger:'amount_zscore=4.8, late_night, high_amount_99', time:'13:38'},
+  {domain:'OPERATIONAL', id:'TXN-47103', score:91, signal:'CRITICAL', trigger:'extreme_deviation, night_high_amount', time:'13:37'},
+  {domain:'CREDIT',      id:'CUST-0389', score:72, signal:'WARNING',  trigger:'savings=Low, employment=Unstable', time:'13:40'},
+  {domain:'MARKET',      id:'BBRI.JK',   score:68, signal:'WARNING',  trigger:'rsi_oversold=28, bb_breach_lower', time:'13:35'},
+  {domain:'OPERATIONAL', id:'TXN-46922', score:66, signal:'WARNING',  trigger:'flag_anomalous_product, odd_hour', time:'13:36'},
+];
+
+const colorMap = {CREDIT:'#3b82f6', MARKET:'#a855f7', OPERATIONAL:'#f59e0b'};
+const tbody = document.getElementById('alertTable');
+
+alerts.forEach(a => {
+  const scoreColor = a.score >= 80 ? RED : YELLOW;
+  const barColor   = a.score >= 80 ? RED : YELLOW;
+  tbody.innerHTML += `
+    <tr>
+      <td><span style="font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:2px;background:${colorMap[a.domain]}22;color:${colorMap[a.domain]}">${a.domain}</span></td>
+      <td class="td-id">${a.id}</td>
+      <td>
+        <div class="score-bar-wrap">
+          <span class="td-score" style="color:${scoreColor};min-width:32px">${a.score}</span>
+          <div class="score-bar-bg">
+            <div class="score-bar-fill" style="width:${a.score}%;background:${barColor}"></div>
+          </div>
+        </div>
+      </td>
+      <td><span class="signal-pill ${a.signal}">${a.signal}</span></td>
+      <td style="color:var(--muted);font-size:11px;max-width:300px">${a.trigger}</td>
+      <td class="td-id">${a.time}</td>
+    </tr>`;
+});
+
+// ── Tab Switcher ─────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
